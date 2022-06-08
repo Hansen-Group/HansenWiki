@@ -1,0 +1,414 @@
+---
+title: "Visualizing output from freeze-dryer"
+author: "Casper Sahl Poulsen"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+always_allow_html: yes
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    toc: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE, 
+                      message = FALSE,
+                      fig.align = "center")
+```
+
+## Introduction 
+#### Study headline:
+Visualize output from CoolSafe 9L Freeze-dryer https://www.labogene.com/CoolSafe-4-15L-Freeze-Dryers  
+Freeze-drying: Primary drying 17h at 0.1hPa and 23 °C. Secondary drying 3h at 0.05hPa and 23 °C.
+
+#### Background:  
+In this context it is processing samples from the DCH-NG cohort (Investigations on the interaction between the microbiome, host genetic variation and life style in the development of type 2 diabetes, cardiovascular disease, liver disease and colorectal cancer) limited to MAX. 
+Project F2: MAX samples where individuals have collected fecal samples at multiple time points, N=1319.   
+Participant and study information is available in a separate document provided by KB.    
+Sample aliquoting is performed from freeze-dried specimens. Sample aliquotation is not feasible using traditional laborious methods such as drilling.   
+
+#### Aim:   
+Visualize output, primarily investigate if freeze-drying is performing according to planned by achieving a steady temperature. 
+
+### Packages  
+```{r}
+
+##mytree plotting
+#library(data.tree) 
+#library(plyr)
+
+library(stringr)
+library(ggplot2)
+library(gridExtra)
+```
+
+### Reading in data
+```{r eval=FALSE}
+#path<-getwd()
+#path2<-list.files(path, full.names = TRUE, recursive = TRUE)
+
+#x <- lapply(strsplit(path, "/"), function(z) as.data.frame(t(z)))
+#x <- rbind.fill(x)
+#x$pathString <- apply(x, 1, function(x) paste(trimws(na.omit(x)), collapse="/"))
+#(mytree <- data.tree::as.Node(x))
+#mytree
+#plot(mytree)
+
+logCS <- read.delim(file="./RUN1/MAX F2 RUN1.csv", 
+                       header=FALSE,
+                       strip.white=TRUE,
+                       sep = ";",
+                       dec=",",
+                       skip=11) #Maybe the skip changes between runs
+
+
+names(logCS) <- lapply(logCS[2, ], as.character)
+logCS<-logCS[-(1:2),]
+
+names(logCS)<-str_replace(names(logCS), " ","_")
+
+#Instead of using the datetime that has multiple of the same entries. 
+#I'm using the log number instead .
+
+##Remove unused columns
+logCS<-logCS[,c(1,3,5,7,11:13)]
+
+for (i in c(1,7)) {
+  logCS[,i] <- as.numeric(as.character(logCS[,i]))
+}
+
+for (i in 2:6) {
+  logCS[,i] <- as.numeric(gsub(",", ".", logCS[,i]))
+} 
+
+```
+
+## Analyses
+### Plot seperately
+```{r eval=FALSE}
+
+
+ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle("Shelf temperatures") + 
+  xlab("Logging event") +
+  ylab("Shelf / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom")
+
+ggplot(logCS[1:200,]) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle("Shelf temperatures first 200 events") + 
+  xlab("Logging event") +
+  ylab("Shelf / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom")
+
+ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Ice_condensor), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle("Ice condensor temperature") + 
+  xlab("Logging event") +
+  ylab("Ice condensor / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom")
+
+ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Product), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle("Product temperature") + 
+  xlab("Logging event") +
+  ylab("Product / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom")
+
+ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Actual_pressure), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle("Actual pressure") + 
+  xlab("Logging event") +
+  ylab("Pressure / XX") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom")
+```
+
+
+### Plot all runs 
+```{r}
+RunList <- list()
+ShelfList <- list()
+Shelf200List <- list()
+ProductList <- list()
+Product100List <- list()
+IceConList <- list()
+ActualPList <- list()
+ActualPylimList <- list()
+
+temp <- list.files(pattern="*.csv")
+#myfiles = lapply(temp, read.delim)
+All <- lapply(temp,function(i){
+  read.delim(i, header=FALSE, strip.white=TRUE, sep = ";", dec=",", skip=11)
+})
+
+names(All) <- temp
+
+for (j in 1:length(temp)) {
+logCS <- All[[j]]
+
+names(logCS) <- lapply(logCS[2, ], as.character)
+logCS<-logCS[-(1:2),]
+
+names(logCS)<-str_replace(names(logCS), " ","_")
+
+#Instead of using the datetime that has multiple of the same entries. 
+#I'm using the log number instead .
+
+##Remove unused columns
+logCS<-logCS[,c(1,3,5,7,11:13)]
+
+for (i in c(1,7)) {
+  logCS[,i] <- as.numeric(as.character(logCS[,i]))
+}
+
+for (i in 2:6) {
+  logCS[,i] <- as.numeric(gsub(",", ".", logCS[,i]))
+} 
+
+##Have to be sure time and LOG_nr is collected identical
+#Have small differences in number of logs, but ok
+
+
+ShelfList[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Shelf temperatures / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+#This is the exact same plot as above, but cannot assign from the one saved in ShelfList
+RunList[["Shelf"]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Shelf temperatures / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+
+
+Shelf200List[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS[1:200,]) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Shelf temperatures first 200 events / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["Shelf200"]] <- ggplot(logCS[1:200,]) + 
+  geom_point(aes(LOG_nr, Shelf1, color="Shelf1"), size=1) + #color = Diagnosis, group = Diagnosis
+  geom_point(aes(LOG_nr, Shelf3, color="Shelf2"), size=1) +
+  geom_point(aes(LOG_nr, Shelf5, color="Shelf3"), size=1) +
+  scale_color_manual(values=c(Shelf1 = "#0000FF", Shelf2 = "#FF0000",
+                              Shelf3 = "#228B22")) +
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Shelf temperatures first 200 events / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+
+
+ProductList[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Product), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Product temparature / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["Product"]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Product), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Product temparature / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+  
+  
+
+Product100List[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS[1:100,]) + 
+  geom_point(aes(LOG_nr, Product), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Product temperature first 100 events / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["Product100"]] <- ggplot(logCS[1:100,]) + 
+  geom_point(aes(LOG_nr, Product), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Product temperature first 100 events / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+ActualPList[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Actual_pressure), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Actual pressure / XX") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["ActualP"]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Actual_pressure), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Actual pressure / XX") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+ActualPylimList[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Actual_pressure), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Actual pressure / XX") +
+  ylim(0, 250) +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["ActualPylim"]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Actual_pressure), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) + 
+  xlab("Logging event") +
+  ylab("Actual pressure / XX") +
+  ylim(0, 250) +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+
+IceConList[[ str_replace(names(All[j]), ".csv","") ]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Ice_condensor), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Ice condensor temperature / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+RunList[["IceCon"]] <- ggplot(logCS) + 
+  geom_point(aes(LOG_nr, Ice_condensor), size=1) + #color = Diagnosis, group = Diagnosis
+  ggtitle(str_replace(names(All[j]), ".csv","")) +  
+  xlab("Logging event") +
+  ylab("Ice condensor temperature / °C") +
+  labs(color="") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        axis.title=element_text(size=12), legend.position="bottom", axis.title.y=element_text(size=9))
+
+
+pdf(paste(str_replace_all(str_replace(names(All[j]), ".csv","")," ", "_"), ".pdf", sep=""))
+do.call('grid.arrange',c(RunList, ncol = 2))
+dev.off()
+}
+
+##Have to define a width and height that works for the number of runs, not made automatic
+#Optimized for 16 runs pdf("ShelfTAll.pdf", width=5, height=25)
+#Otherwise run with pdf("ShelfTAll.pdf") and so forth
+pdf("ShelfTAll.pdf", width=5, height=15)
+do.call('grid.arrange', c(ShelfList, ncol = 2))
+dev.off()
+
+pdf("ShelfT200All.pdf", width=5, height=15)
+do.call('grid.arrange', c(Shelf200List, ncol = 2))
+dev.off()
+
+pdf("ProductTAll.pdf", width=5, height=15)
+do.call('grid.arrange', c(ProductList, ncol = 2))
+dev.off()
+
+pdf("ProductT100All.pdf", width=5, height=15)
+do.call('grid.arrange', c(Product100List, ncol = 2))
+dev.off()
+
+pdf("IceConAll.pdf", width=5, height=15)
+do.call('grid.arrange', c(IceConList, ncol = 2))
+dev.off()
+
+pdf("ActualPAll.pdf", width=5, height=15)
+do.call('grid.arrange', c(ActualPList, ncol = 2))
+dev.off()
+
+pdf("ActualPAllylim0_250.pdf", width=5, height=15)
+do.call('grid.arrange', c(ActualPylimList, ncol = 2))
+dev.off()
+
+```
+
+
+## Additional
+### Session information
+```{r session_info}
+sessionInfo()
+```
+
+### This document was processed on: 
+```{r}
+Sys.Date()
+```
+
