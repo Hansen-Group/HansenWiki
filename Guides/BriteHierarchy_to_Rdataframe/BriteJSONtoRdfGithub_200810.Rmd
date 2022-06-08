@@ -1,0 +1,173 @@
+---
+title: "Brite hiearchy as dataframe in R"
+author: "Casper Sahl Poulsen"
+date: '10082020'
+always_allow_html: yes
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
+  html_document:
+    toc: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE, 
+                      message = FALSE,
+                      fig.align = "center")
+```
+
+## Introduction
+Hacky solution to creating a brite hiearchy as dataframe in R.   
+The hiearchy is retrieved as json from KEGG orthology  
+https://www.genome.jp/kegg-bin/get_htext#C1  
+
+I have not found any better solution to manipulate a nested list and thought this might be helpful for this very specific purpose. I'm sure there is a better solution, but sometimes you just want it to work. 
+
+### Packages 
+```{r}
+#install.packages(c("plyr", "dplyr", "rjson", "stringr"))
+library("plyr")
+library("dplyr")
+library("rjson")
+library("stringr")
+```
+
+## Analysis
+### Getting the data to dataframe
+Raw dataframe
+```{r}
+# KObrite <- fromJSON(file = "ko00001.json") #Stored locally
+KObrite <- fromJSON(file = 
+                      "https://www.genome.jp/kegg-bin/download_htext?htext=ko00001&format=json&filedir=")
+#print(KObrite)
+#lengths(KObrite)
+
+str(KObrite, max.level = 1)
+str(KObrite, max.level = 2)
+str(KObrite, max.level = 3)
+str(KObrite, max.level = 4)
+#str(KObrite, max.level = 5)
+
+#Make unlisted version
+KObriter<-unlist(KObrite, recursive=TRUE)
+KObriter[1:10]
+
+#Got this from Claus Wilke:
+#https://stackoverflow.com/questions/48250997/extracting-information-from-multi-level-nested-lists/48251877
+KO_flat <- function(x) {
+  if (is.null(x)) return(NULL)
+  if (!is.null(x$name)) { # if there's a name, we're at the level of a person
+    children <- x$children
+    x$children <- NULL
+    row <- data.frame(plyr::defaults(x, list(name = NA)),
+                      stringsAsFactors = FALSE)
+    rbind(row, KO_flat(children))
+  }
+  else {
+    purrr::map_dfr(x, KO_flat)
+  }
+}
+flat<-KO_flat(KObrite)
+flat[1:10,]
+
+##pseudo hiearchy
+KObriteHier<-names(rapply(KObrite, function(x) head(x, 1)))
+#which(KObriteHier=="children.name")
+#which(KObriteHier=="children.children.name")
+#which(KObriteHier=="children.children.children.name")
+#length(which(KObriteHier=="children.children.children.children.name"))
+#length(which(KObriteHier=="children.children.children.children.name")[indexing[1]:indexing[2]]) #Select first indexing to check
+
+##The loop is build to repeat the top level hierchy based on the number of times "children.children.children.children.name" were observed in the given interval    
+##Level 1
+#flat[which(KObriteHier=="children.name"),]
+vec<-character()
+indexing<-c(which(KObriteHier=="children.name"), length(KObriteHier))
+#i<-1
+p<-0
+for (i in which(KObriteHier=="children.name")) {
+  p<-p+1
+  vec<-c(vec, rep(flat[i,], 
+                  times=length(which(
+                      KObriteHier[indexing[p]:indexing[p+1]]==
+                        "children.children.children.children.name"))))
+}
+level1<-vec
+
+##Level 2
+#flat[which(KObriteHier=="children.children.name"),]
+vec<-character()
+indexing<-c(which(KObriteHier=="children.children.name"), length(KObriteHier))
+#i<-1
+p<-0
+for (i in which(KObriteHier=="children.children.name")) {
+  p<-p+1
+  vec<-c(vec, rep(flat[i,], 
+                  times=length(which(
+                      KObriteHier[indexing[p]:indexing[p+1]]==
+                        "children.children.children.children.name"))))
+}
+level2<-vec
+
+##Level 3
+#flat[which(KObriteHier=="children.children.children.name"),]
+vec<-character()
+indexing<-c(which(KObriteHier=="children.children.children.name"), length(KObriteHier))
+#i<-1
+p<-0
+for (i in which(KObriteHier=="children.children.children.name")) {
+  p<-p+1
+  vec<-c(vec, rep(flat[i,], 
+                  times=length(which(
+                      KObriteHier[indexing[p]:indexing[p+1]]==
+                        "children.children.children.children.name"))))
+}
+level3<-vec
+
+##Level 4 
+#straight forward at lowest level just need all "children.children.children.children.name"
+level4<-flat[which(KObriteHier=="children.children.children.children.name"),]
+
+
+df<-data.frame(Level1=level1, Level2=level2, Level3=level3, Level4=level4)
+```
+
+### Manipulate dataframe
+Just some minor manipulations that I used myself
+```{r}
+#Not interested in level 4 
+df2<-df[,1:3] %>% distinct
+
+#Only want as part of a path used as ID
+df2$ID <- as.character(regmatches(df2$Level3, gregexpr("\\[.+?\\]", df2$Level3)))
+df2$ID <- str_replace(df2$ID, "\\[PATH:","")
+df2$ID <- str_replace(df2$ID, "\\]","")
+
+#Remove numbers 
+df2$Level1<-gsub("^\\d+|\\d+$", "", df2$Level1)    
+df2$Level1<-trimws(df2$Level1)
+
+df2$Level2<-gsub("^\\d+|\\d+$", "", df2$Level2)    
+df2$Level2<-trimws(df2$Level2)
+
+df2$Level3<-gsub("^\\d+|\\d+$", "", df2$Level3)    
+df2$Level3<-trimws(df2$Level3)
+
+#write.table(df2, file="FeatureFunctional_200812.txt", quote = F, row.names = F, sep="\t")
+```
+
+
+## Additional
+### Session information
+```{r session_info}
+sessionInfo()
+```
+
+### This document was processed on: 
+```{r date}
+Sys.Date()
+```
+
